@@ -103,6 +103,30 @@ def stop_game(message):
     sessions[current_session]["sentence"] = []
     sessions[current_session]["current_question"] = 0
     
+
+@bot.message_handler(commands=['leave'])
+def leave(message):
+    global users
+    global sessions
+    
+    chat_id = str(message.chat.id)
+    current_session = users[chat_id]
+    if chat_id == current_session:
+        send_all_users("Организатор покинул партию. Партия удалена.", current_session)
+        for x in sessions[current_session]["user_list"]:
+            users.pop(x)
+        sessions.pop(current_session)
+    else:
+        users.pop(chat_id)
+        print(sessions[current_session]["user_list"])
+        print(message.chat.id)
+        sessions[current_session]["user_list"].remove(chat_id)
+    
+        send_all_users(message.from_user.first_name + " покинул партию", current_session)
+        bot.send_message(chat_id, "Вы покинули партию")
+    
+
+
 @bot.message_handler(content_types=['text'])
 def any_input(message):
     global users
