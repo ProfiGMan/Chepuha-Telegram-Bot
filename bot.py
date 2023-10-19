@@ -1,13 +1,16 @@
 import telebot
 
-bot = telebot.TeleBot("6425741002:AAEDy6dg14uqGYYV30RxOpzjQ4JhAaApOSc")
+bot = telebot.TeleBot("6457207433:AAH6-0_V-ZfGp_-0hRO7P9nvKxVY46xCez0")
 
 users = {}
 sessions = {}
+questions = ["Кто?", "С кем?", "Когда?", "Где?", "Что делали?", "И что делали?", "Что им мешало?", "Кто их видел?", "Что спросил?", "Ему ответили: ...", "Дело закончилось..."]
 
 def next_move(message, session):
     if sessions[session]["current_turn"] == "1":
         sessions[session]["current_turn"] = session
+        sessions[session]["current_question"] = 0;
+        sessions[session]["question_list"] = questions
     else:
         current_turn_index = sessions[session]["user_list"].index(sessions[session]["current_turn"])
         user_list_length = len(sessions[session]["user_list"])
@@ -15,8 +18,16 @@ def next_move(message, session):
             sessions[session]["current_turn"] = sessions[session]["user_list"][0]
         else:
             sessions[session]["current_turn"] = sessions[session]["user_list"][current_turn_index + 1]
+        
+        question_list_length = len(questions)
+        #len(session[session]["question_list"])
+        if sessions[session]["current_question"] + 1 == question_list_length:
+            stop_game(message)
+        else:
+            sessions[session]["current_question"] += 1
 
-    send_all_users("Сейчас ходит " + sessions[session]["current_turn"], session)
+    current_question = sessions[session]["question_list"][sessions[session]["current_question"]]
+    send_all_users(current_question + "\nОтвечает " + sessions[session]["current_turn"], session)
     
 
 def send_all_users(message, session_id):
@@ -35,9 +46,10 @@ def send_welcome(message):
 def create_session(message):
     global users
     global sessions
+    global questions
 
     chat_id = str(message.chat.id)
-    sessions[chat_id] = {"user_list": [chat_id], "current_turn": "", "sentence": []}
+    sessions[chat_id] = {"user_list": [chat_id], "current_turn": "", "question_list": [], "current_question": 0,  "sentence": []}
     users[chat_id] = chat_id
 
     bot.send_message(message.chat.id, "Айди вашей партии: " + chat_id)
@@ -50,12 +62,13 @@ def join_session(message):
 
     chat_id = str(message.chat.id)
     session_id = message.text.replace("/join", '').replace(' ', '')
+    session_id = "923476979"
     if session_id not in sessions:
         bot.send_message(chat_id, "Партия " + session_id + " не найдена")
     else:
         users[chat_id] = session_id
         sessions[session_id]["user_list"].append(chat_id)
-        send_all_users(message.from_user.username + " подключился к партии", session_id)
+        send_all_users("Кто-то подключился к партии", session_id)
         
 
 @bot.message_handler(commands=['start_game'])
@@ -80,9 +93,15 @@ def stop_game(message):
 
     chat_id = str(message.chat.id)
     current_session = users[chat_id]
-    send_all_users(str(sessions[current_session]["sentence"]), current_session)
+    sentence = ""
+    
+    for element in sessions[current_session]["sentence"]:
+    	if sentence != "": sentence += ' '
+    	sentence += element
+    
+    send_all_users("Результат: " + sentence, current_session)
     sessions[current_session]["sentence"] = []
-
+    sessions[current_session]["current_question"] = 0
     
 @bot.message_handler(content_types=['text'])
 def any_input(message):
