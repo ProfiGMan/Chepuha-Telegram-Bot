@@ -6,6 +6,28 @@ users = {}
 sessions = {}
 questions = ["Кто?", "С кем?", "Когда?", "Где?", "Что делали?", "И что делали?", "Что им мешало?", "Кто их видел?", "Что спросил?", "Ему ответили: ...", "Дело закончилось..."]
 
+bot.set_my_commands(
+    commands=[
+        telebot.types.BotCommand("/start", "Получить базовую информацию"),
+        telebot.types.BotCommand("/create", "Создать комнату"),
+        telebot.types.BotCommand("/join", "Подключиться к уже существующей комнате"),
+        telebot.types.BotCommand("/leave", "Покинуть комнату. Комната удаляется, если вы организатор"),
+        telebot.types.BotCommand("/start_game", "Начать играть"),
+        telebot.types.BotCommand("/stop_game", "Закончить предложение")
+    ],
+)
+
+
+def check_if_not_connected(chat_id):
+    global users
+
+    if chat_id not in users:
+        bot.send_message(chat_id, "Вы еще не подключились к партии")
+        return True
+    else:
+        return False
+
+
 def next_move(message, session):
     if sessions[session]["current_turn"] == "1":
         sessions[session]["current_turn"] = session
@@ -27,7 +49,11 @@ def next_move(message, session):
             sessions[session]["current_question"] += 1
 
     current_question = sessions[session]["question_list"][sessions[session]["current_question"]]
-    send_all_users(current_question + "\nОтвечает " + sessions[session]["current_turn"], session)
+    next_user_chat = bot.get_chat(sessions[session]["current_turn"])
+    next_user_name = next_user_chat.first_name
+    if next_user_chat.last_name != None: 
+        next_user_name += " " + next_user_chat.last_name
+    send_all_users(current_question + "\nОтвечает " + next_user_name, session)
     
 
 def send_all_users(message, session_id):
@@ -39,7 +65,10 @@ def send_all_users(message, session_id):
 
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
-    bot.reply_to(message, "Напиши /create, чтобы начать новую партию, или /join [id создателя партии], чтобы подключиться к уже существующей")
+    bot.reply_to(message, "Добро пожаловать в бота Чепуха!\n"\
+        "Здесь можно поиграть во всем известную игру по сети вместе с друзьями.\n"\
+        "Чтобы создать свою комнату, введите /create.\nЧтобы присоединиться к уже существующей комнате, введите /join [номер комнаты].\n"\
+        "Остальные команды доступны в Menu.")
 
 
 @bot.message_handler(commands=['create'])
@@ -49,10 +78,20 @@ def create_session(message):
     global questions
 
     chat_id = str(message.chat.id)
+
+    if sessions != {} and chat_id in users:
+        if users(chat_id) == chat_id:
+            bot.send_message(message.chat.id, "Партия уже создана\\.\nДругим пользователям нужно ввести `/join " + chat_id + "`, чтобы присоединиться\\.",
+                parse_mode='MarkdownV2')
+        else: 
+            bot.send_message(chat_id, "Вы уже подключены к партии " + users(chat_id))
+        return
+
     sessions[chat_id] = {"user_list": [chat_id], "current_turn": "", "question_list": [], "current_question": 0,  "sentence": []}
     users[chat_id] = chat_id
 
-    bot.send_message(message.chat.id, "Айди вашей партии: " + chat_id)
+    bot.send_message(message.chat.id, "Партия создана\\.\nДругим пользователям нужно ввести `/join " + chat_id + "`, чтобы присоединиться\\.",
+        parse_mode='MarkdownV2')
 
 
 @bot.message_handler(commands=['join'])
@@ -62,14 +101,42 @@ def join_session(message):
 
     chat_id = str(message.chat.id)
     session_id = message.text.replace("/join", '').replace(' ', '')
-    session_id = "923476979"
+
+    if chat_id in users:
+        bot.send_message(chat_id, "Вы уже подключены к партии " + users(chat_id))
+        return
+
     if session_id not in sessions:
         bot.send_message(chat_id, "Партия " + session_id + " не найдена")
     else:
         users[chat_id] = session_id
         sessions[session_id]["user_list"].append(chat_id)
-        send_all_users("Кто-то подключился к партии", session_id)
-        
+        send_all_users(message.from_user.full_name + " подключился к партии", session_id)
+
+
+@bot.message_handler(commands=['leave'])
+def leave(message):
+    global users
+    global sessions
+    
+    chat_id = str(message.chat.id)
+
+    if check_if_not_connected(chat_id): return
+
+    current_session = users[chat_id]
+
+    if chat_id == current_session:
+        send_all_users("Организатор покинул партию. Партия удалена.", current_session)
+        for x in sessions[current_session]["user_list"]:
+            users.pop(x)
+        sessions.pop(current_session)
+    else:
+        users.pop(chat_id)
+        sessions[current_session]["user_list"].remove(chat_id)
+    
+        send_all_users(message.from_user.full_name + " покинул партию", current_session)
+        bot.send_message(chat_id, "Вы покинули партию")
+
 
 @bot.message_handler(commands=['start_game'])
 def start_session(message):
@@ -77,8 +144,13 @@ def start_session(message):
     global sessions
 
     chat_id = str(message.chat.id)
+
+    if check_if_not_connected(chat_id): return
+
     current_session = users[chat_id]
-    if chat_id != current_session:
+    if sessions[current_session]["current_turn"] == "1":
+        bot.send_message(chat_id, "Игра уже запущена.")
+    elif chat_id != current_session:
         bot.send_message(chat_id, "Запустить игру может только организатор")
     else:
         sessions[current_session]["current_turn"] = "1"
@@ -92,6 +164,9 @@ def stop_game(message):
     global sessions
 
     chat_id = str(message.chat.id)
+
+    if check_if_not_connected(chat_id): return
+
     current_session = users[chat_id]
     sentence = ""
     
@@ -104,29 +179,6 @@ def stop_game(message):
     sessions[current_session]["current_question"] = 0
     
 
-@bot.message_handler(commands=['leave'])
-def leave(message):
-    global users
-    global sessions
-    
-    chat_id = str(message.chat.id)
-    current_session = users[chat_id]
-    if chat_id == current_session:
-        send_all_users("Организатор покинул партию. Партия удалена.", current_session)
-        for x in sessions[current_session]["user_list"]:
-            users.pop(x)
-        sessions.pop(current_session)
-    else:
-        users.pop(chat_id)
-        print(sessions[current_session]["user_list"])
-        print(message.chat.id)
-        sessions[current_session]["user_list"].remove(chat_id)
-    
-        send_all_users(message.from_user.first_name + " покинул партию", current_session)
-        bot.send_message(chat_id, "Вы покинули партию")
-    
-
-
 @bot.message_handler(content_types=['text'])
 def any_input(message):
     global users
@@ -138,10 +190,10 @@ def any_input(message):
         return
     
     current_session = users[chat_id]
-    if sessions[current_session]["current_turn"] == []:
+    if sessions[current_session]["current_turn"] == "":
         bot.send_message(chat_id, "Организатор еще не запустил игру")
         return
-    
+
     if sessions[current_session]["current_turn"] != chat_id:
         bot.send_message(chat_id, "Сейчас не ваш ход")
         return
