@@ -86,11 +86,10 @@ def callback_query(call):
 def send_welcome(message):
     markup = InlineKeyboardMarkup()
     markup.row_width = 2
-    markup.add(InlineKeyboardButton("Создать", callback_data="create"),                            InlineKeyboardButton("Подключиться", callback_data="join"))
-    bot.reply_to(message, "Добро пожаловать в бота Чепуха!\n"\
+    markup.add(InlineKeyboardButton("Создать", callback_data="create"), InlineKeyboardButton("Подключиться", callback_data="join"))
+    bot.send_message(message.chat.id, "Добро пожаловать в бота Чепуха!\n"\
         "Здесь можно поиграть во всем известную игру по сети вместе с друзьями.\n"\
-        "Чтобы создать комнату, введите /create.\nЧтобы присоединиться к уже существующей комнате, введите /join [номер комнаты].\n"\
-        "Остальные команды доступны в Menu.", reply_markup=markup)
+        "Ниже вы можете создать новую комнату или подключиться к уже существующей.", reply_markup=markup)
 
 
 @bot.message_handler(commands=['create'])
