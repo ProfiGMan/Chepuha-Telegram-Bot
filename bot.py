@@ -126,7 +126,7 @@ def leave(message):
     current_session = users[chat_id]
 
     if chat_id == current_session:
-        send_all_users("Организатор покинул комната. Комната удалена.", current_session)
+        send_all_users("Организатор покинул комнату. Комната удалена.", current_session)
         for x in sessions[current_session]["user_list"]:
             users.pop(x)
         sessions.pop(current_session)
