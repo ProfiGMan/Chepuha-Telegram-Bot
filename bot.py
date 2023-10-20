@@ -68,10 +68,17 @@ def send_all_users(message, session_id):
 @bot.callback_query_handler(func=lambda call: True)
 def callback_query(call):
     if call.data == "create":
-        bot.answer_callback_query(call.id)
         create_session(call.message)
+        bot.answer_callback_query(call.id)
     elif call.data == "join":
-    	bot.answer_callback_query(call.id, "Подключение к комнате")
+    	chat_id = str(call.message.chat.id)
+    	if users != {} and chat_id in users:
+            bot.send_message(chat_id, "Вы уже подключены к комнате " + users[chat_id])
+            bot.answer_callback_query(call.id)
+            return
+    	users[chat_id] = "joining"
+    	bot.send_message(call.message.chat.id, "Введите номер комнаты:")
+    	bot.answer_callback_query(call.id)
     	
 
 
@@ -96,16 +103,16 @@ def create_session(message):
 
     if sessions != {} and chat_id in users:
         if users[chat_id] == chat_id:
-            bot.send_message(message.chat.id, "Комната уже создана\\.\nДругим пользователям нужно ввести `/join " + chat_id + "`, чтобы присоединиться\\.",
-                parse_mode='MarkdownV2')
+            bot.send_message(message.chat.id, "Комната уже создана\\.\nНомер комнаты: `" + chat_id + "`\\.",
+        parse_mode='MarkdownV2')
         else: 
-            bot.send_message(chat_id, "Вы уже подключены к комнате " + users(chat_id))
+            bot.send_message(chat_id, "Вы уже подключены к комнате " + users[chat_id])
         return
 
     sessions[chat_id] = {"user_list": [chat_id], "current_turn": "", "question_list": [], "current_question": 0,  "sentence": []}
     users[chat_id] = chat_id
 
-    bot.send_message(message.chat.id, "Комната создана\\.\nДругим пользователям нужно ввести `/join " + chat_id + "`, чтобы присоединиться\\.",
+    bot.send_message(message.chat.id, "Комната создана\\.\nНомер комнаты: `" + chat_id + "`\\.",
         parse_mode='MarkdownV2')
 
 
@@ -116,11 +123,11 @@ def join_session(message):
 
     chat_id = str(message.chat.id)
     session_id = message.text.replace("/join", '').replace(' ', '')
-
-    if chat_id in users:
-        bot.send_message(chat_id, "Вы уже подключены к комнате " + users[chat_id])
-        return
-
+    
+    if users != {} and chat_id in users:
+            bot.send_message(chat_id, "Вы уже подключены к комнате " + users[chat_id])
+            return
+    
     if session_id not in sessions:
         bot.send_message(chat_id, "Комната " + session_id + " не найдена")
     else:
@@ -202,6 +209,10 @@ def any_input(message):
     chat_id = str(message.chat.id)
     if chat_id not in users:
         send_welcome(message)
+        return
+    if users[chat_id] == "joining":
+        users.pop(chat_id)
+        join_session(message)
         return
     
     current_session = users[chat_id]
