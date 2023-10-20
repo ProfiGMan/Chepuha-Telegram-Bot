@@ -1,4 +1,5 @@
 import telebot
+from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
 bot = telebot.TeleBot("6457207433:AAH6-0_V-ZfGp_-0hRO7P9nvKxVY46xCez0")
 
@@ -63,12 +64,26 @@ def send_all_users(message, session_id):
     for user in sessions[session_id]["user_list"]:
         bot.send_message(user, message)
 
+
+@bot.callback_query_handler(func=lambda call: True)
+def callback_query(call):
+    if call.data == "create":
+        bot.answer_callback_query(call.id)
+        create_session(call.message)
+    elif call.data == "join":
+    	bot.answer_callback_query(call.id, "Подключение к комнате")
+    	
+
+
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
+    markup = InlineKeyboardMarkup()
+    markup.row_width = 2
+    markup.add(InlineKeyboardButton("Создать", callback_data="create"),                            InlineKeyboardButton("Подключиться", callback_data="join"))
     bot.reply_to(message, "Добро пожаловать в бота Чепуха!\n"\
         "Здесь можно поиграть во всем известную игру по сети вместе с друзьями.\n"\
-        "Чтобы создать свою комнату, введите /create.\nЧтобы присоединиться к уже существующей комнате, введите /join [номер комнаты].\n"\
-        "Остальные команды доступны в Menu.")
+        "Чтобы создать комнату, введите /create.\nЧтобы присоединиться к уже существующей комнате, введите /join [номер комнаты].\n"\
+        "Остальные команды доступны в Menu.", reply_markup=markup)
 
 
 @bot.message_handler(commands=['create'])
@@ -80,7 +95,7 @@ def create_session(message):
     chat_id = str(message.chat.id)
 
     if sessions != {} and chat_id in users:
-        if users(chat_id) == chat_id:
+        if users[chat_id] == chat_id:
             bot.send_message(message.chat.id, "Комната уже создана\\.\nДругим пользователям нужно ввести `/join " + chat_id + "`, чтобы присоединиться\\.",
                 parse_mode='MarkdownV2')
         else: 
@@ -103,7 +118,7 @@ def join_session(message):
     session_id = message.text.replace("/join", '').replace(' ', '')
 
     if chat_id in users:
-        bot.send_message(chat_id, "Вы уже подключены к комнате " + users(chat_id))
+        bot.send_message(chat_id, "Вы уже подключены к комнате " + users[chat_id])
         return
 
     if session_id not in sessions:
