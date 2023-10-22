@@ -1,7 +1,7 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-bot = telebot.TeleBot("6618058650:AAH0pUKlWVoPsfLkH5bAvVAexwhpYLfhOK8")
+bot = telebot.TeleBot("6457207433:AAH6-0_V-ZfGp_-0hRO7P9nvKxVY46xCez0")
 
 users = {}
 sessions = {}
@@ -13,7 +13,6 @@ bot.set_my_commands(
         telebot.types.BotCommand("/create", "Создать комнату"),
         telebot.types.BotCommand("/join", "Подключиться к уже существующей комнате"),
         telebot.types.BotCommand("/leave", "Покинуть комнату. Комната удаляется, если вы организатор"),
-        telebot.types.BotCommand("/start_game", "Начать играть"),
         telebot.types.BotCommand("/stop_game", "Закончить предложение")
     ],
 )
@@ -83,16 +82,16 @@ def callback_query(call):
     	ask_number(call.message)
     	bot.answer_callback_query(call.id)
     elif call.data == "start":
-    	start_session(call.message)
-    	bot.edit_message_reply_markup(call.from_user.id, call.message.message_id, reply_markup=InlineKeyboardMarkup())
+    	start_session(call)
     elif call.data == "skip":
-    	current_session = users[str(call.message.chat.id)]
-    	if call.message.chat.id != sessions[current_session]["current_turn"] and call.message.chat.id != current_session:
-    	    bot.answer_callback_query(call.id, "Сейчас не ваш ход")
-    	    return
-    	sessions[current_session]["current_question"] -= 1
-    	next_move(call.message, current_session)
-    	bot.answer_callback_query(call.id)
+        user = str(call.message.chat.id)
+        current_session = users[user]
+        if user != sessions[current_session]["current_turn"] and user != current_session:
+            bot.answer_callback_query(call.id, "Сейчас не ваш ход")
+            return
+        sessions[current_session]["current_question"] -= 1
+        next_move(call.message, current_session)
+        bot.answer_callback_query(call.id)
     	
 
 
@@ -178,25 +177,28 @@ def leave(message):
         send_all_users(message.from_user.full_name + " покинул комнату", current_session)
         bot.send_message(chat_id, "Вы покинули комнату")
 
+    send_welcome(message)
 
-@bot.message_handler(commands=['start_game'])
-def start_session(message):
+
+def start_session(call):
     global users
     global sessions
 
+    message = call.message
     chat_id = str(message.chat.id)
 
     if check_if_not_connected(chat_id): return
 
     current_session = users[chat_id]
     if sessions[current_session]["current_turn"] == "1":
-        bot.send_message(chat_id, "Игра уже запущена.")
+        bot.answer_callback_query(call.id, "Игра уже запущена")
     elif chat_id != current_session:
-        bot.send_message(chat_id, "Запустить игру может только организатор")
+        bot.answer_callback_query(call.id, "Запустить игру может только организатор")
     else:
         sessions[current_session]["current_turn"] = "1"
-        bot.send_message(chat_id, "Игра запущена!")
+        bot.answer_callback_query(call.id, "Игра запущена")
         next_move(message, current_session)
+    bot.edit_message_reply_markup(call.from_user.id, message.message_id, reply_markup=InlineKeyboardMarkup())
 
 
 @bot.message_handler(commands=['stop_game'])
