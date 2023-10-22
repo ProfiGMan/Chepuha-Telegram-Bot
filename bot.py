@@ -1,7 +1,7 @@
 import telebot
 from telebot.types import InlineKeyboardMarkup, InlineKeyboardButton
 
-bot = telebot.TeleBot("6457207433:AAH6-0_V-ZfGp_-0hRO7P9nvKxVY46xCez0")
+bot = telebot.TeleBot("6618058650:AAH0pUKlWVoPsfLkH5bAvVAexwhpYLfhOK8")
 
 users = {}
 sessions = {}
@@ -42,8 +42,7 @@ def next_move(message, session):
         else:
             sessions[session]["current_turn"] = sessions[session]["user_list"][current_turn_index + 1]
         
-        question_list_length = len(questions)
-        #len(session[session]["question_list"])
+        question_list_length = len(sessions[session]["question_list"]) 
         if sessions[session]["current_question"] + 1 == question_list_length:
             stop_game(message)
         else:
@@ -54,8 +53,18 @@ def next_move(message, session):
     next_user_name = next_user_chat.first_name
     if next_user_chat.last_name != None: 
         next_user_name += " " + next_user_chat.last_name
-    send_all_users(current_question + "\nОтвечает " + next_user_name, session)
-    
+
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Пропустить ход", callback_data="skip"))
+    for user in sessions[session]["user_list"]:
+        if user != session and user != sessions[session]["current_turn"]:
+            markup = InlineKeyboardMarkup()
+            
+        text = current_question + "\nОтвечает " + next_user_name
+        if user == sessions[session]["current_turn"]:
+            text += " *\\(Вы\\)*"
+        bot.send_message(user, text, parse_mode='MarkdownV2', reply_markup=markup)
+        
 
 def send_all_users(message, session_id):
     global users
@@ -71,13 +80,18 @@ def callback_query(call):
         create_session(call.message)
         bot.answer_callback_query(call.id)
     elif call.data == "join":
-    	chat_id = str(call.message.chat.id)
-    	if users != {} and chat_id in users:
-            bot.send_message(chat_id, "Вы уже подключены к комнате " + users[chat_id])
-            bot.answer_callback_query(call.id)
-            return
-    	users[chat_id] = "joining"
-    	bot.send_message(call.message.chat.id, "Введите номер комнаты:")
+    	ask_number(call.message)
+    	bot.answer_callback_query(call.id)
+    elif call.data == "start":
+    	start_session(call.message)
+    	bot.edit_message_reply_markup(call.from_user.id, call.message.message_id, reply_markup=InlineKeyboardMarkup())
+    elif call.data == "skip":
+    	current_session = users[str(call.message.chat.id)]
+    	if call.message.chat.id != sessions[current_session]["current_turn"] and call.message.chat.id != current_session:
+    	    bot.answer_callback_query(call.id, "Сейчас не ваш ход")
+    	    return
+    	sessions[current_session]["current_question"] -= 1
+    	next_move(call.message, current_session)
     	bot.answer_callback_query(call.id)
     	
 
@@ -85,7 +99,6 @@ def callback_query(call):
 @bot.message_handler(commands=['start'])
 def send_welcome(message):
     markup = InlineKeyboardMarkup()
-    markup.row_width = 2
     markup.add(InlineKeyboardButton("Создать", callback_data="create"), InlineKeyboardButton("Подключиться", callback_data="join"))
     bot.send_message(message.chat.id, "Добро пожаловать в бота Чепуха!\n"\
         "Здесь можно поиграть во всем известную игру по сети вместе с друзьями.\n"\
@@ -110,22 +123,15 @@ def create_session(message):
 
     sessions[chat_id] = {"user_list": [chat_id], "current_turn": "", "question_list": [], "current_question": 0,  "sentence": []}
     users[chat_id] = chat_id
+    
+    markup = InlineKeyboardMarkup()
+    markup.add(InlineKeyboardButton("Начать игру", callback_data="start"))
+    bot.send_message(message.chat.id, "Комната создана\\.\nОтправьте номер комнаты друзьям: `" + chat_id + "`\\.",
+        parse_mode='MarkdownV2', reply_markup=markup)
 
-    bot.send_message(message.chat.id, "Комната создана\\.\nНомер комнаты: `" + chat_id + "`\\.",
-        parse_mode='MarkdownV2')
-
-
-@bot.message_handler(commands=['join'])
 def join_session(message):
-    global users
-    global sessions
-
     chat_id = str(message.chat.id)
     session_id = message.text.replace("/join", '').replace(' ', '')
-    
-    if users != {} and chat_id in users:
-            bot.send_message(chat_id, "Вы уже подключены к комнате " + users[chat_id])
-            return
     
     if session_id not in sessions:
         bot.send_message(chat_id, "Комната " + session_id + " не найдена")
@@ -133,6 +139,20 @@ def join_session(message):
         users[chat_id] = session_id
         sessions[session_id]["user_list"].append(chat_id)
         send_all_users(message.from_user.full_name + " подключился к комнате", session_id)
+
+
+@bot.message_handler(commands=['join'])
+def ask_number(message):
+    global users
+    global sessions
+
+    chat_id = str(message.chat.id)
+    
+    if users != {} and chat_id in users:
+            bot.send_message(chat_id, "Вы уже подключены к комнате " + users[chat_id])
+            return
+    users[chat_id] = "joining"
+    bot.send_message(chat_id, "Введите номер комнаты:")
 
 
 @bot.message_handler(commands=['leave'])
